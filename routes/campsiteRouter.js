@@ -1,3 +1,4 @@
+  
 const express = require('express');
 const Campsite = require('../models/campsite');
 const authenticate = require('../authenticate');
@@ -221,4 +222,4 @@ campsiteRouter.route('/:campsiteId/comments/:commentId')
     .catch(err => next(err));
 });
 
-module.exports = campsiteRouter;
+module.exports = campsiteRouter; 
