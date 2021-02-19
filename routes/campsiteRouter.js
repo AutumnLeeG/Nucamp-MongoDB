@@ -186,7 +186,7 @@ campsiteRouter.route('/:campsiteId/comments/:commentId')
                 res.json(campsite);
             })
             .catch(err => next(err));
-        }} else if (!campsite) {
+        }} else if ((campsite.comments.id(req.params.commentId).author._id).equals(req.user._id)) {
             err = new Error(`Campsite ${req.params.campsiteId} not found`);
             err.status = 404;
             return next(err);
