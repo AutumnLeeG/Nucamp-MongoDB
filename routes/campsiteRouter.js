@@ -1,8 +1,8 @@
-  
 const express = require('express');
 const Campsite = require('../models/campsite');
 const authenticate = require('../authenticate');
 const cors = require('./cors');
+
 
 const campsiteRouter =  express.Router();
 
@@ -28,7 +28,7 @@ campsiteRouter.route('/')
     })
     .catch(err => next(err));
 })
-.put(cors.corsWithOptions, authenticate.verifyUser, (req, res) => {
+.put(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res) => {
     res.statusCode = 403;
     res.end('PUT operation not supported on /campsites');
 })
@@ -54,7 +54,7 @@ campsiteRouter.route('/:campsiteId')
     })
     .catch(err => next(err));
 })
-.post(cors.corsWithOptions, authenticate.verifyUser, (req, res, next) => {
+.post(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res) => {
     res.statusCode = 403;
     res.end(`POST operation not supported on /campsites/${req.params.campsiteId}`);
 })
@@ -122,7 +122,7 @@ campsiteRouter.route('/:campsiteId/comments')
     res.statusCode = 403;
     res.end(`PUT operation not supported on /campsites/${req.params.campsiteId}/comments`);
 })
- .delete(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) => {
+.delete(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) => {
     Campsite.findById(req.params.campsiteId)
     .then(campsite => {
         if (campsite) {
@@ -168,21 +168,51 @@ campsiteRouter.route('/:campsiteId/comments/:commentId')
     })
     .catch(err => next(err));
 })
-.post(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) => {
+.post(cors.corsWithOptions, authenticate.verifyUser, (req, res) => {
     res.statusCode = 403;
     res.end(`POST operation not supported on /campsites/${req.params.campsiteId}/comments/${req.params.commentId}`);
 })
 .put(cors.corsWithOptions, authenticate.verifyUser, authenticate.verifyAdmin, (req, res, next) => {
+        Campsite.findById(req.params.campsiteId)
+        .then(campsite => {
+            if (campsite && campsite.comments.id(req.params.commentId)) {
+                if (req.user._id.equals(campsite.comments.id(req.params.commentId).author._id)) {
+                    if (req.body.rating) {
+                        campsite.comments.id(req.params.commentId).rating = req.body.rating;
+                    }
+                    if (req.body.text) {
+                        campsite.comments.id(req.params.commentId).text = req.body.text;
+                    }
+                    campsite.save()
+                    .then(campsite => {
+                        res.statusCode = 200;
+                        res.setHeader('Content-Type', 'application/json');
+                        res.json(campsite);
+                    })
+                    .catch(err => next(err));
+                } else {
+                    err = new Error('Operation not authorized!');
+                    err.status = 403;
+                    return next(err);
+                }
+            } else if (!campsite) {
+                err = new Error(`Campsite ${req.params.campsiteId} not found`);
+                err.status = 404;
+                return next(err);
+            } else {
+                err = new Error(`Comment ${req.params.commentId} not found`);
+                err.status = 404;
+                return next(err);
+            }
+        })
+        .catch(err => next(err));
+})
+.delete(cors.corsWithOptions, authenticate.verifyUser, (req, res, next) => {
     Campsite.findById(req.params.campsiteId)
     .then(campsite => {
         if (campsite && campsite.comments.id(req.params.commentId)) {
-            if((campsite.comments.id(req.params.commentId).author._id).equals(req.user._id)) {
-                if (req.body.rating) {
-                    campsite.comments.id(req.params.commentId).rating = req.body.rating;
-                }
-                if (req.body.text) {
-                    campsite.comments.id(req.params.commentId).text = req.body.text;
-                }
+            if (req.user._id.equals(campsite.comments.id(req.params.commentId).author._id)) {
+                campsite.comments.id(req.params.commentId).remove();
                 campsite.save()
                 .then(campsite => {
                     res.statusCode = 200;
@@ -191,40 +221,11 @@ campsiteRouter.route('/:campsiteId/comments/:commentId')
                 })
                 .catch(err => next(err));
             } else {
-                err = new Error(`You are not authorized to delete this comment!`);
-                err.status = 404;
+                err = new Error('Operation not authorized!');
+                err.status = 403;
                 return next(err);
             }
         } else if (!campsite) {
-            err = new Error(`Campsite ${req.params.campsiteId} not found`);
-            err.status = 404;
-            return next(err);
-        } else {
-            err = new Error(`Comment ${req.params.commentId} not found`);
-            err.status = 404;
-            return next(err);
-        }
-    })
-    .catch(err => next(err));
-})
-.delete(cors.corsWithOptions, authenticate.verifyUser, (req, res, next) => {
-    Campsite.findById(req.params.campsiteId)
-    .then(campsite => {
-        if (campsite && campsite.comments.id(req.params.commentId)) {
-                   if((campsite.comments.id(req.params.commentId).author._id).equals(req.user._id)) {
-                    campsite.comments.id(req.params.commentId).remove();
-                    campsite.save()
-            .then(campsite => {
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.json(campsite);
-            })
-            .catch(err => next(err));
-        } else {
-            err = new Error(`You are not authorized to delete this commit!`);
-            err.status = 403;
-            return next(err);
-        }} else if (!campsite) {
             err = new Error(`Campsite ${req.params.campsiteId} not found`);
             err.status = 404;
             return next(err);
